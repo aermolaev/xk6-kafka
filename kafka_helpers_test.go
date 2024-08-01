@@ -2,10 +2,9 @@ package kafka
 
 import (
 	"context"
-	"errors"
 	"testing"
 
-	"github.com/dop251/goja"
+	"github.com/grafana/sobek"
 	kafkago "github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/require"
 	"go.k6.io/k6/js/common"
@@ -21,7 +20,7 @@ const (
 
 // struct to keep all the things test need in one place.
 type kafkaTest struct {
-	rt            *goja.Runtime
+	rt            *sobek.Runtime
 	module        *Module
 	vu            *modulestest.VU
 	samples       chan metrics.SampleContainer
@@ -32,7 +31,7 @@ type kafkaTest struct {
 // nolint: golint,revive
 func getTestModuleInstance(tb testing.TB) *kafkaTest {
 	tb.Helper()
-	runtime := goja.New()
+	runtime := sobek.New()
 	runtime.SetFieldNameMapper(common.FieldNameMapper{})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -64,10 +63,6 @@ func getTestModuleInstance(tb testing.TB) *kafkaTest {
 
 // moveToVUCode moves to the VU code from the init code (to test certain functions).
 func (k *kafkaTest) moveToVUCode() error {
-	rootGroup, err := lib.NewGroup("", nil)
-	if err != nil {
-		return errors.Unwrap(err)
-	}
 	samples := make(chan metrics.SampleContainer, 1000)
 	// Save it, so we can reuse it in other tests
 	k.samples = samples
@@ -75,20 +70,13 @@ func (k *kafkaTest) moveToVUCode() error {
 	registry := metrics.NewRegistry()
 
 	state := &lib.State{
-		Group: rootGroup,
 		Options: lib.Options{
 			UserAgent: null.StringFrom("TestUserAgent"),
 			Paused:    null.BoolFrom(false),
 		},
-		BufferPool: lib.NewBufferPool(),
-		Samples:    k.samples,
-		Tags: lib.NewVUStateTags(
-			registry.RootTagSet().WithTagsFromMap(
-				map[string]string{
-					"group": rootGroup.Path,
-				},
-			),
-		),
+		BufferPool:     lib.NewBufferPool(),
+		Samples:        k.samples,
+		Tags:           lib.NewVUStateTags(registry.RootTagSet()),
 		BuiltinMetrics: metrics.RegisterBuiltinMetrics(registry),
 	}
 	k.vu.StateField = state
